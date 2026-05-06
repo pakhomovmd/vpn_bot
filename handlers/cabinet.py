@@ -144,12 +144,13 @@ async def guide_ios(callback: CallbackQuery):
         "📱 <b>Инструкция для iPhone/iPad</b>\n\n"
         "<b>Шаг 1:</b> Скачай приложение\n"
         "• Открой App Store\n"
-        "• Найди <b>Streisand</b> или <b>FoXray</b>\n"
+        "• Найди <b>Hiddify</b>\n"
+        "* Если видите сообщение \"Приложение недоступно в вашем регионе\" или оно не отображается в поиске, то нужно сменить регион в AppStore на любой кроме РФ *\n"
         "• Установи приложение\n\n"
         "<b>Шаг 2:</b> Добавь конфигурацию\n"
         "• Открой приложение\n"
         "• Нажми на <b>+</b> или <b>Add Server</b>\n"
-        "• Выбери <b>Import from Clipboard</b>\n\n"
+        "• Выбери <b>Clipboard</b> или <b>Буфер обмена</b>\n\n"
         "<b>Шаг 3:</b> Скопируй ключ\n"
         "• Вернись в бота\n"
         "• Нажми «Мои ключи VPN»\n"
@@ -162,8 +163,7 @@ async def guide_ios(callback: CallbackQuery):
         "✅ Готово! VPN подключен.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📥 Streisand", url="https://apps.apple.com/app/streisand/id6450534064")],
-            [InlineKeyboardButton(text="📥 FoXray", url="https://apps.apple.com/app/foxray/id6448898396")],
+            [InlineKeyboardButton(text="📥 Hiddify", url="https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532")],
             [InlineKeyboardButton(text="◀️ Назад", callback_data=back_callback)]
         ])
     )
@@ -179,16 +179,16 @@ async def guide_android(callback: CallbackQuery):
         "🤖 <b>Инструкция для Android</b>\n\n"
         "<b>Шаг 1:</b> Скачай приложение\n"
         "• Открой Google Play\n"
-        "• Найди <b>v2rayNG</b>\n"
+        "• Найди <b>Hiddify</b>\n"
         "• Установи приложение\n\n"
         "<b>Шаг 2:</b> Скопируй ключ\n"
         "• Вернись в бота\n"
         "• Нажми «Мои ключи VPN»\n"
         "• Нажми на ключ чтобы скопировать\n\n"
         "<b>Шаг 3:</b> Добавь конфигурацию\n"
-        "• Открой v2rayNG\n"
+        "• Открой Hiddify\n"
         "• Нажми на <b>+</b> в правом верхнем углу\n"
-        "• Выбери <b>Import config from Clipboard</b>\n\n"
+        "• Выбери <b>Clipboard</b> или <b>Буфер обмена</b>\n\n"
         "<b>Шаг 4:</b> Подключись\n"
         "• Нажми на добавленный сервер\n"
         "• Нажми кнопку подключения внизу\n"
@@ -196,7 +196,7 @@ async def guide_android(callback: CallbackQuery):
         "✅ Готово! VPN подключен.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📥 v2rayNG", url="https://play.google.com/store/apps/details?id=com.v2ray.ang")],
+            [InlineKeyboardButton(text="📥 Hiddify", url="https://play.google.com/store/apps/details?id=app.hiddify.com")],
             [InlineKeyboardButton(text="◀️ Назад", callback_data=back_callback)]
         ])
     )

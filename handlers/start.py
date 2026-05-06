@@ -298,7 +298,7 @@ async def help_command(message: Message):
         "💬 <b>Поддержка</b>\n\n"
         "Если у тебя возникли вопросы или проблемы:\n\n"
         "📧 Email: sakuravpnsupp@gmail.com\n"
-        "💬 Telegram: @sakuravpn_supp\n\n"
+        "💬 Telegram: @wirklichsakura\n\n"
         "Мы отвечаем в течение 24 часов.",
         parse_mode="HTML",
         reply_markup=back_main()
