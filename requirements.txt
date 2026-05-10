@@ -5,3 +5,4 @@ alembic==1.13.1
 python-dotenv==1.0.1
 aiohttp==3.10.11
 apscheduler==3.10.4
+yookassa==3.0.0

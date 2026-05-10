@@ -22,6 +22,7 @@ from services.vpn import xray
 from services.cryptopay import cryptopay
 from services.heleket import heleket
 from services.cardlink import cardlink
+from services.yukassa import yukassa
 
 router = Router()
 
@@ -45,6 +46,7 @@ def payment_method_keyboard(plan_key: str) -> InlineKeyboardMarkup:
     plan = PLANS[plan_key]
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"⭐️ Telegram Stars — {plan['price_stars']} ⭐️", callback_data=f"method_stars:{plan_key}")],
+        [InlineKeyboardButton(text=f"💳 ЮKassa (карты РФ) — {plan['price_rub']} ₽", callback_data=f"method_yukassa:{plan_key}")],
         [InlineKeyboardButton(text=f"🤖 CryptoBot — ${plan['price_usd']}", callback_data=f"crypto_cryptobot:{plan_key}")],
         [InlineKeyboardButton(text=f"💎 Любая криптовалюта — ${plan['price_usd']}", callback_data=f"crypto_heleket:{plan_key}")],
         [InlineKeyboardButton(text="◀️ Назад", callback_data="buy")],
@@ -648,6 +650,184 @@ async def check_payment_cardlink(callback: CallbackQuery):
         reply_markup=back_main()
     )
 
+
+# ============================================
+# ЮKassa (карты РФ)
+# ============================================
+
+def payment_keyboard_yukassa(pay_url: str, payment_id: str) -> InlineKeyboardMarkup:
+    """Кнопки для оплаты через ЮKассу."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Оплатить", url=pay_url)],
+        [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"check_yukassa:{payment_id}")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="back_main")],
+    ])
+
+
+@router.callback_query(F.data.startswith("method_yukassa:"))
+async def select_yukassa_method(callback: CallbackQuery):
+    """Создание платежа через ЮKассу."""
+    plan_key = callback.data.split(":")[1]
+    plan = PLANS.get(plan_key)
+    if not plan:
+        await callback.answer("Тариф не найден", show_alert=True)
+        return
+    
+    user_id = callback.from_user.id
+    amount = plan["price_rub"]
+    
+    print(f"[YuKassa] Создание платежа для user_id={user_id}, plan={plan_key}, amount={amount}")
+    
+    # Создаем order_id для отслеживания
+    order_id = f"{user_id}:{plan_key}:{int(datetime.now(timezone.utc).timestamp())}"
+    
+    # Создаем платеж в ЮKassa
+    payment_result = await yukassa.create_payment(
+        amount=amount,
+        description=f"VPN подписка {plan['title']}",
+        order_id=order_id,
+        return_url=f"https://t.me/{callback.bot.username}"
+    )
+    
+    if not payment_result:
+        await callback.answer("Ошибка создания платежа. Попробуйте позже.", show_alert=True)
+        return
+    
+    payment_id = payment_result["payment_id"]
+    confirmation_url = payment_result["confirmation_url"]
+    
+    print(f"[YuKassa] Платеж создан: payment_id={payment_id}")
+    
+    # Сохраняем платеж в БД
+    async with async_session() as session:
+        db_payment = Payment(
+            user_id=user_id,
+            yukassa_id=payment_id,
+            plan_key=plan_key,
+            amount=amount,
+            status="pending",
+            created_at=datetime.now(timezone.utc)
+        )
+        session.add(db_payment)
+        await session.commit()
+    
+    await callback.message.edit_text(
+        f"💳 <b>Оплата через ЮKассу</b>\n\n"
+        f"Тариф: <b>{plan['title']}</b>\n"
+        f"Цена: <b>{amount} ₽</b>\n\n"
+        f"Нажми «Оплатить» и следуй инструкциям.\n"
+        f"После оплаты нажми «Я оплатил» для проверки.",
+        parse_mode="HTML",
+        reply_markup=payment_keyboard_yukassa(confirmation_url, payment_id)
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("check_yukassa:"))
+async def check_yukassa_payment(callback: CallbackQuery):
+    """Проверка статуса платежа ЮKassa."""
+    payment_id = callback.data.split(":")[1]
+    
+    print(f"[YuKassa] Проверка платежа: payment_id={payment_id}")
+    
+    # Проверяем статус в ЮKassa
+    payment_status = await yukassa.get_payment_status(payment_id)
+    
+    if not payment_status:
+        await callback.answer("Ошибка проверки платежа. Попробуйте позже.", show_alert=True)
+        return
+    
+    status = payment_status["status"]
+    paid = payment_status["paid"]
+    
+    print(f"[YuKassa] Статус платежа {payment_id}: status={status}, paid={paid}")
+    
+    if not paid or status != "succeeded":
+        await callback.answer(
+            "⏳ Платёж ещё не поступил. Попробуй через минуту.",
+            show_alert=True
+        )
+        return
+    
+    # Платеж успешен - активируем подписку
+    async with async_session() as session:
+        # Обновляем статус платежа в БД
+        payment_result = await session.execute(
+            select(Payment).where(Payment.yukassa_id == payment_id)
+        )
+        db_payment = payment_result.scalar_one_or_none()
+        
+        if not db_payment:
+            await callback.answer("Платёж не найден в базе данных.", show_alert=True)
+            return
+        
+        if db_payment.status == "succeeded":
+            await callback.answer("Этот платёж уже обработан.", show_alert=True)
+            return
+        
+        db_payment.status = "succeeded"
+        db_payment.paid_at = datetime.now(timezone.utc)
+        
+        user_id = db_payment.user_id
+        plan_key = db_payment.plan_key
+        plan = PLANS.get(plan_key)
+        
+        if not plan:
+            await callback.answer("Тариф не найден.", show_alert=True)
+            return
+        
+        # Проверяем есть ли активная подписка
+        sub_result = await session.execute(
+            select(Subscription)
+            .where(Subscription.user_id == user_id, Subscription.is_active == True)
+            .order_by(Subscription.expires_at.desc())
+        )
+        existing_sub = sub_result.scalar_one_or_none()
+        
+        if existing_sub:
+            # Продлеваем
+            existing_sub.expires_at += timedelta(days=plan["days"])
+            existing_sub.plan_key = plan_key
+            await xray.extend_client(existing_sub.xray_uuid, plan["days"])
+            action = "продлена"
+            print(f"[YuKassa] Подписка продлена для user_id={user_id}, plan={plan['title']}")
+        else:
+            # Создаём новую
+            vpn_client = await xray.create_client(user_id, plan["days"])
+            if vpn_client:
+                new_sub = Subscription(
+                    user_id=user_id,
+                    xray_uuid=vpn_client["uuid"],
+                    vless_link=vpn_client["vless_link"],
+                    plan_key=plan_key,
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=plan["days"]),
+                )
+                session.add(new_sub)
+                action = "активирована"
+                print(f"[YuKassa] Новая подписка создана для user_id={user_id}, plan={plan['title']}")
+            else:
+                await callback.message.edit_text(
+                    "❌ Платёж прошёл, но не удалось создать VPN ключ. Обратись в поддержку.",
+                    reply_markup=back_main()
+                )
+                return
+        
+        await session.commit()
+    
+    await callback.message.edit_text(
+        f"✅ <b>Подписка {action}!</b>\n\n"
+        f"Тариф: <b>{plan['title']}</b>\n"
+        f"Срок: <b>{plan['days']} дней</b>\n\n"
+        f"Нажми «Мои ключи VPN» чтобы получить ключ.",
+        parse_mode="HTML",
+        reply_markup=back_main()
+    )
+    await callback.answer()
+
+
+# ============================================
+# Telegram Stars
+# ============================================
 
 # Обработчик успешной оплаты через Telegram Stars
 @router.pre_checkout_query()
