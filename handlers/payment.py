@@ -681,12 +681,16 @@ async def select_yukassa_method(callback: CallbackQuery):
     # Создаем order_id для отслеживания
     order_id = f"{user_id}:{plan_key}:{int(datetime.now(timezone.utc).timestamp())}"
     
+    # Получаем username бота
+    bot_info = await callback.bot.get_me()
+    bot_username = bot_info.username
+    
     # Создаем платеж в ЮKassa
     payment_result = await yukassa.create_payment(
         amount=amount,
         description=f"VPN подписка {plan['title']}",
         order_id=order_id,
-        return_url=f"https://t.me/{callback.bot.username}"
+        return_url=f"https://t.me/{bot_username}"
     )
     
     if not payment_result:
